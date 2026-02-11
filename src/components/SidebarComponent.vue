@@ -59,7 +59,6 @@ const menuGroups: MenuGroup[] = [
   },
   {
     category: 'Laporan',
-    adminOnly: true,
     items: [
       { name: 'reports', label: 'Laporan', icon: 'chart', path: '/reports', adminOnly: true },
       { name: 'activity-log', label: 'Activity Log', icon: 'log', path: '/activity-log', adminOnly: true },
