@@ -3,11 +3,13 @@ import { ref, computed, reactive } from 'vue'
 import ModalDialog from '@/components/ModalDialog.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import PhotoCapture from '@/components/PhotoCapture.vue'
+import PaginationBar from '@/components/PaginationBar.vue'
 import { useUserStore } from '@/stores/users'
 import { useActivityLogStore } from '@/stores/activityLog'
 import type { User, Gender, BloodType } from '@/types'
 import { formatDate, getGenderLabel, calculateAge } from '@/utils/helpers'
 import { usePermissions } from '@/composables/usePermissions'
+import { usePagination } from '@/composables/usePagination'
 
 const userStore = useUserStore()
 const logStore = useActivityLogStore()
@@ -52,6 +54,9 @@ const filteredStaff = computed(() => {
     (m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q) || m.phone.includes(q) || (m.nik && m.nik.includes(q))
   )
 })
+
+const staffPagination = usePagination(filteredStaff, 30)
+const paginatedStaff = staffPagination.paginatedItems
 
 function togglePasswordVisibility(userId: string) {
   if (visiblePasswords.value.has(userId)) {
@@ -175,7 +180,7 @@ function copyPassword() {
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-            <tr v-for="s in filteredStaff" :key="s.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer" @click="openDetail(s)">
+            <tr v-for="s in paginatedStaff" :key="s.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer" @click="openDetail(s)">
               <td class="px-5 py-3.5">
                 <div class="flex items-center gap-3">
                   <img v-if="s.photo || s.avatar" :src="s.photo || s.avatar" :alt="s.name" class="h-10 w-10 rounded-full object-cover ring-2 ring-gray-200 dark:ring-gray-700" />
@@ -228,7 +233,18 @@ function copyPassword() {
           </tbody>
         </table>
       </div>
-      <div class="border-t border-gray-200 dark:border-gray-700 px-5 py-3 text-sm text-gray-500 dark:text-gray-400">Total: {{ filteredStaff.length }} staff</div>
+      <PaginationBar
+        :current-page="staffPagination.currentPage.value"
+        :total-pages="staffPagination.totalPages.value"
+        :total-items="staffPagination.totalItems.value"
+        :start-index="staffPagination.startIndex.value"
+        :end-index="staffPagination.endIndex.value"
+        :visible-pages="staffPagination.visiblePages.value"
+        label="staff"
+        @go-to-page="staffPagination.goToPage"
+        @prev="staffPagination.prevPage"
+        @next="staffPagination.nextPage"
+      />
     </div>
 
     <!-- Add/Edit Modal -->

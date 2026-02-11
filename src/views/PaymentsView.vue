@@ -2,6 +2,7 @@
 import { ref, computed, reactive } from 'vue'
 import ModalDialog from '@/components/ModalDialog.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import PaginationBar from '@/components/PaginationBar.vue'
 import { useUserStore } from '@/stores/users'
 import { useMembershipStore } from '@/stores/memberships'
 import { usePaymentStore } from '@/stores/payments'
@@ -9,6 +10,7 @@ import { useActivityLogStore } from '@/stores/activityLog'
 import type { Payment, PaymentMethod, PaymentStatus } from '@/types'
 import { formatCurrency, formatDate, formatDateTime, getStatusColor, getPaymentMethodLabel, nowISO } from '@/utils/helpers'
 import { usePermissions } from '@/composables/usePermissions'
+import { usePagination } from '@/composables/usePagination'
 
 const userStore = useUserStore()
 const logStore = useActivityLogStore()
@@ -50,6 +52,9 @@ const filteredPayments = computed(() => {
   }
   return result
 })
+
+const paymentPagination = usePagination(filteredPayments, 30)
+const paginatedPayments = paymentPagination.paginatedItems
 
 const memberMemberships = computed(() => {
   if (!form.memberId) return []
@@ -164,7 +169,7 @@ const totalFiltered = computed(() => filteredPayments.value.reduce((sum, p) => s
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-            <tr v-for="payment in filteredPayments" :key="payment.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer" @click="openDetail(payment)">
+            <tr v-for="payment in paginatedPayments" :key="payment.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer" @click="openDetail(payment)">
               <td class="px-5 py-3.5 font-mono text-sm text-primary-600 font-medium">{{ payment.invoiceNumber }}</td>
               <td class="px-5 py-3.5 font-medium text-gray-900 dark:text-gray-100">{{ getMemberName(payment.memberId) }}</td>
               <td class="px-5 py-3.5 font-semibold text-gray-900 dark:text-gray-100">{{ formatCurrency(payment.amount) }}</td>
@@ -189,6 +194,18 @@ const totalFiltered = computed(() => filteredPayments.value.reduce((sum, p) => s
           </tbody>
         </table>
       </div>
+      <PaginationBar
+        :current-page="paymentPagination.currentPage.value"
+        :total-pages="paymentPagination.totalPages.value"
+        :total-items="paymentPagination.totalItems.value"
+        :start-index="paymentPagination.startIndex.value"
+        :end-index="paymentPagination.endIndex.value"
+        :visible-pages="paymentPagination.visiblePages.value"
+        label="pembayaran"
+        @go-to-page="paymentPagination.goToPage"
+        @prev="paymentPagination.prevPage"
+        @next="paymentPagination.nextPage"
+      />
     </div>
 
     <!-- Add Payment Modal -->

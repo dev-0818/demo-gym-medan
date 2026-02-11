@@ -3,11 +3,13 @@ import { ref, computed, reactive } from 'vue'
 import ModalDialog from '@/components/ModalDialog.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import PhotoCapture from '@/components/PhotoCapture.vue'
+import PaginationBar from '@/components/PaginationBar.vue'
 import { useUserStore } from '@/stores/users'
 import { useActivityLogStore } from '@/stores/activityLog'
 import type { User, Gender, BloodType } from '@/types'
 import { formatDate, getGenderLabel, calculateAge } from '@/utils/helpers'
 import { usePermissions } from '@/composables/usePermissions'
+import { usePagination } from '@/composables/usePagination'
 
 const userStore = useUserStore()
 const logStore = useActivityLogStore()
@@ -57,6 +59,9 @@ const filteredMembers = computed(() => {
       (m.nik && m.nik.includes(q))
   )
 })
+
+const memberPagination = usePagination(filteredMembers, 30)
+const paginatedMembers = memberPagination.paginatedItems
 
 function togglePasswordVisibility(userId: string) {
   if (visiblePasswords.value.has(userId)) {
@@ -251,7 +256,7 @@ function maskPassword(password: string): string {
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-            <tr v-for="member in filteredMembers" :key="member.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer" @click="openDetail(member)">
+            <tr v-for="member in paginatedMembers" :key="member.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer" @click="openDetail(member)">
               <td class="px-5 py-3.5">
                 <div class="flex items-center gap-3">
                   <img
@@ -320,9 +325,18 @@ function maskPassword(password: string): string {
           </tbody>
         </table>
       </div>
-      <div class="border-t border-gray-200 dark:border-gray-700 px-5 py-3 text-sm text-gray-500 dark:text-gray-400">
-        Total: {{ filteredMembers.length }} member
-      </div>
+      <PaginationBar
+        :current-page="memberPagination.currentPage.value"
+        :total-pages="memberPagination.totalPages.value"
+        :total-items="memberPagination.totalItems.value"
+        :start-index="memberPagination.startIndex.value"
+        :end-index="memberPagination.endIndex.value"
+        :visible-pages="memberPagination.visiblePages.value"
+        label="member"
+        @go-to-page="memberPagination.goToPage"
+        @prev="memberPagination.prevPage"
+        @next="memberPagination.nextPage"
+      />
     </div>
 
     <!-- Add/Edit Modal -->

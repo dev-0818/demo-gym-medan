@@ -67,6 +67,11 @@ const router = createRouter({
           component: () => import('@/views/ClassScheduleView.vue'),
         },
         {
+          path: 'pt',
+          name: 'pt',
+          component: () => import('@/views/PTView.vue'),
+        },
+        {
           path: 'activity-log',
           name: 'activity-log',
           component: () => import('@/views/ActivityLogView.vue'),

@@ -4,6 +4,8 @@ import { useActivityLogStore } from '@/stores/activityLog'
 import { useUserStore } from '@/stores/users'
 import type { ActivityAction } from '@/types'
 import { formatDateTime } from '@/utils/helpers'
+import { usePagination } from '@/composables/usePagination'
+import PaginationBar from '@/components/PaginationBar.vue'
 
 const logStore = useActivityLogStore()
 const userStore = useUserStore()
@@ -47,6 +49,9 @@ const filteredLogs = computed(() => {
 
   return result
 })
+
+const logPagination = usePagination(filteredLogs, 30)
+const paginatedLogs = logPagination.paginatedItems
 
 function getActionLabel(action: ActivityAction): string {
   const labels: Record<ActivityAction, string> = {
@@ -212,7 +217,7 @@ function formatTime(timestamp: string): string {
       <!-- Log items -->
       <div v-else class="divide-y divide-gray-100 dark:divide-gray-700">
         <div
-          v-for="log in filteredLogs"
+          v-for="log in paginatedLogs"
           :key="log.id"
           class="flex items-start gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
         >
@@ -278,8 +283,18 @@ function formatTime(timestamp: string): string {
     </div>
 
     <!-- Summary -->
-    <div v-if="filteredLogs.length > 0" class="text-center text-sm text-gray-500 dark:text-gray-400">
-      Menampilkan {{ filteredLogs.length }} dari {{ logStore.logs.length }} log
-    </div>
+    <PaginationBar
+      v-if="filteredLogs.length > 0"
+      :current-page="logPagination.currentPage.value"
+      :total-pages="logPagination.totalPages.value"
+      :total-items="logPagination.totalItems.value"
+      :start-index="logPagination.startIndex.value"
+      :end-index="logPagination.endIndex.value"
+      :visible-pages="logPagination.visiblePages.value"
+      label="log"
+      @go-to-page="logPagination.goToPage"
+      @prev="logPagination.prevPage"
+      @next="logPagination.nextPage"
+    />
   </div>
 </template>

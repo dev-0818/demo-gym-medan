@@ -140,3 +140,34 @@ export interface ClassSchedule {
   createdAt: string
   updatedAt: string
 }
+
+// --- Personal Trainer (PT) Session ---
+
+export type PTSubscriptionStatus = 'active' | 'completed' | 'expired' | 'cancelled'
+
+/** Master data: PT session packages (e.g. 8 sesi = Rp1.200.000) */
+export interface PTPackage {
+  id: string
+  name: string
+  sessions: number        // jumlah sesi
+  pricePerSession: number // harga per sesi
+  totalPrice: number      // total harga (sessions * pricePerSession or custom)
+  description: string
+  isActive: boolean
+  createdAt: string
+}
+
+/** A member's PT subscription (member beli paket PT) */
+export interface PTSubscription {
+  id: string
+  memberId: string
+  trainerId: string
+  ptPackageId: string
+  totalSessions: number
+  usedSessions: number
+  status: PTSubscriptionStatus
+  startDate: string
+  endDate: string
+  notes: string
+  createdAt: string
+}

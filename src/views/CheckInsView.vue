@@ -3,6 +3,8 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useCheckInStore } from '@/stores/checkins'
 import { useUserStore } from '@/stores/users'
 import { formatDateTime } from '@/utils/helpers'
+import { usePagination } from '@/composables/usePagination'
+import PaginationBar from '@/components/PaginationBar.vue'
 
 const checkInStore = useCheckInStore()
 const userStore = useUserStore()
@@ -41,6 +43,9 @@ const displayCheckins = computed(() => {
   }
   return result
 })
+
+const checkinPagination = usePagination(displayCheckins, 30)
+const paginatedCheckins = checkinPagination.paginatedItems
 
 const todayActiveCount = computed(() => {
   void lastRefresh.value
@@ -355,7 +360,7 @@ function simulateScan() {
               </td>
             </tr>
             <tr
-              v-for="ci in displayCheckins"
+              v-for="ci in paginatedCheckins"
               :key="ci.id"
               :class="[
                 'transition-colors',
@@ -423,8 +428,18 @@ function simulateScan() {
     </div>
 
     <!-- Summary -->
-    <div v-if="displayCheckins.length > 0" class="text-center text-sm text-gray-500 dark:text-gray-400">
-      Total {{ displayCheckins.length }} check-in
-    </div>
+    <PaginationBar
+      v-if="displayCheckins.length > 0"
+      :current-page="checkinPagination.currentPage.value"
+      :total-pages="checkinPagination.totalPages.value"
+      :total-items="checkinPagination.totalItems.value"
+      :start-index="checkinPagination.startIndex.value"
+      :end-index="checkinPagination.endIndex.value"
+      :visible-pages="checkinPagination.visiblePages.value"
+      label="check-in"
+      @go-to-page="checkinPagination.goToPage"
+      @prev="checkinPagination.prevPage"
+      @next="checkinPagination.nextPage"
+    />
   </div>
 </template>

@@ -2,19 +2,27 @@
 import { ref, computed, reactive } from 'vue'
 import ModalDialog from '@/components/ModalDialog.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import PaginationBar from '@/components/PaginationBar.vue'
 import { useUserStore } from '@/stores/users'
 import { usePackageStore } from '@/stores/packages'
 import { useMembershipStore } from '@/stores/memberships'
+import { usePTStore } from '@/stores/pt'
 import { useActivityLogStore } from '@/stores/activityLog'
 import type { Membership, MembershipStatus } from '@/types'
 import { formatDate, formatCurrency, daysRemaining, getStatusColor, addDays, todayISO } from '@/utils/helpers'
 import { usePermissions } from '@/composables/usePermissions'
+import { usePagination } from '@/composables/usePagination'
 
 const userStore = useUserStore()
 const logStore = useActivityLogStore()
 const packageStore = usePackageStore()
 const membershipStore = useMembershipStore()
+const ptStore = usePTStore()
 const { canDelete } = usePermissions()
+
+function getActivePTSub(memberId: string) {
+  return ptStore.getActiveSubscriptionByMember(memberId)
+}
 
 const search = ref('')
 const filterStatus = ref<string>('all')
@@ -49,14 +57,41 @@ const filteredMemberships = computed(() => {
   return result
 })
 
+const msPagination = usePagination(filteredMemberships, 30)
+const paginatedMemberships = msPagination.paginatedItems
+
 function getMemberName(id: string) { return userStore.getUserById(id)?.name || '-' }
 function getPackageName(id: string) { return packageStore.getPackageById(id)?.name || '-' }
 function getTrainerName(id?: string) { return id ? userStore.getUserById(id)?.name || '-' : '-' }
+
+function getPackagePTSessions(packageId: string): number | null {
+  const pkg = packageStore.getPackageById(packageId)
+  if (!pkg) return null
+  const ptFeature = pkg.features.find((f: string) => /\d+x\s*sesi\s*personal\s*trainer/i.test(f))
+  if (!ptFeature) return null
+  const match = ptFeature.match(/(\d+)/)
+  return match ? parseInt(match[1]) : null
+}
+
+const selectedPackageHasPT = computed(() => {
+  if (!form.packageId) return false
+  const pkg = packageStore.getPackageById(form.packageId)
+  if (!pkg) return false
+  return pkg.name.toLowerCase().includes('pt') || pkg.features.some((f: string) => f.toLowerCase().includes('personal trainer'))
+})
+
+const selectedPackagePTSessions = computed(() => {
+  return getPackagePTSessions(form.packageId) || 0
+})
 
 function onPackageChange() {
   const pkg = packageStore.getPackageById(form.packageId)
   if (pkg && form.startDate) {
     form.endDate = addDays(form.startDate, pkg.durationDays)
+  }
+  // Reset trainer if package doesn't have PT
+  if (!selectedPackageHasPT.value) {
+    form.trainerId = ''
   }
 }
 
@@ -97,6 +132,36 @@ function save() {
   } else {
     membershipStore.addMembership(data)
     logStore.addLog({ action: 'create', targetType: 'membership', targetId: '', targetName: memberName, details: `Menambahkan membership baru untuk "${memberName}"` })
+
+    // Auto-create PT subscription if package includes PT
+    if (selectedPackageHasPT.value && data.trainerId) {
+      const pkg = packageStore.getPackageById(data.packageId)
+      // Extract session count from features (e.g. "8x sesi Personal Trainer")
+      let ptSessions = 8
+      if (pkg) {
+        const ptFeature = pkg.features.find((f: string) => /\d+x\s*sesi\s*personal\s*trainer/i.test(f))
+        if (ptFeature) {
+          const match = ptFeature.match(/(\d+)/)
+          if (match) ptSessions = parseInt(match[1])
+        }
+      }
+      // Find matching PT package or use the closest one
+      const matchingPTPackage = ptStore.activePTPackages.find((p) => p.sessions === ptSessions) || ptStore.activePTPackages[0]
+      if (matchingPTPackage) {
+        const sub = ptStore.addSubscription({
+          memberId: data.memberId,
+          trainerId: data.trainerId,
+          ptPackageId: matchingPTPackage.id,
+          totalSessions: ptSessions,
+          usedSessions: 0,
+          status: 'active',
+          startDate: data.startDate,
+          endDate: data.endDate,
+          notes: `Otomatis dari paket ${pkg?.name || 'membership'}`,
+        })
+        logStore.addLog({ action: 'create', targetType: 'pt-subscription', targetId: sub.id, targetName: memberName, details: `Otomatis menambahkan ${ptSessions} sesi PT untuk "${memberName}" dari paket membership` })
+      }
+    }
   }
   showModal.value = false
 }
@@ -160,10 +225,16 @@ function confirmDelete() {
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-            <tr v-for="ms in filteredMemberships" :key="ms.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+            <tr v-for="ms in paginatedMemberships" :key="ms.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
               <td class="px-5 py-3.5 font-medium text-gray-900 dark:text-gray-100">{{ getMemberName(ms.memberId) }}</td>
-              <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">{{ getPackageName(ms.packageId) }}</td>
-              <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">{{ getTrainerName(ms.trainerId) }}</td>
+              <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">
+                {{ getPackageName(ms.packageId) }}
+                <span v-if="getPackagePTSessions(ms.packageId)" class="inline-flex items-center rounded-full bg-orange-100 dark:bg-orange-900/30 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 dark:text-orange-400 ml-1">{{ getPackagePTSessions(ms.packageId) }} sesi PT</span>
+              </td>
+              <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">
+                <span v-if="ms.trainerId">{{ getTrainerName(ms.trainerId) }}</span>
+                <span v-else class="text-gray-400">-</span>
+              </td>
               <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">{{ formatDate(ms.startDate) }}</td>
               <td class="px-5 py-3.5 text-gray-600 dark:text-gray-400">{{ formatDate(ms.endDate) }}</td>
               <td class="px-5 py-3.5">
@@ -194,7 +265,18 @@ function confirmDelete() {
           </tbody>
         </table>
       </div>
-      <div class="border-t border-gray-200 dark:border-gray-700 px-5 py-3 text-sm text-gray-500 dark:text-gray-400">Total: {{ filteredMemberships.length }} membership</div>
+      <PaginationBar
+        :current-page="msPagination.currentPage.value"
+        :total-pages="msPagination.totalPages.value"
+        :total-items="msPagination.totalItems.value"
+        :start-index="msPagination.startIndex.value"
+        :end-index="msPagination.endIndex.value"
+        :visible-pages="msPagination.visiblePages.value"
+        label="membership"
+        @go-to-page="msPagination.goToPage"
+        @prev="msPagination.prevPage"
+        @next="msPagination.nextPage"
+      />
     </div>
 
     <!-- Modal -->
@@ -217,12 +299,13 @@ function confirmDelete() {
           </div>
         </div>
 
-        <div>
-          <label class="label">Personal Trainer (opsional)</label>
-          <select v-model="form.trainerId" class="select">
-            <option value="">Tanpa trainer</option>
-            <option v-for="t in userStore.trainers" :key="t.id" :value="t.id">{{ t.name }}</option>
+        <div v-if="selectedPackageHasPT">
+          <label class="label">Personal Trainer</label>
+          <select v-model="form.trainerId" class="select" required>
+            <option value="">Pilih trainer</option>
+            <option v-for="t in userStore.trainers.filter(t => t.isActive)" :key="t.id" :value="t.id">{{ t.name }}</option>
           </select>
+          <p class="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium">🏋️ Paket ini termasuk {{ selectedPackagePTSessions }} sesi Personal Trainer</p>
         </div>
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
